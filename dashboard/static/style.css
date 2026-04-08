@@ -1,0 +1,684 @@
+/* ==========================================================================
+   NEURAL-CLINICS cockpit-calm dashboard
+   Strict NC design system — B612 Mono, 3-hue discipline, 1px borders,
+   hex-only signature gradients, no motion except deliberate 160ms transitions.
+   ========================================================================== */
+
+/* ---------- B612 Mono (served via /api/font/<face>) ----------------------- */
+
+@font-face {
+  font-family: 'B612 Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/api/font/Regular') format('truetype');
+}
+@font-face {
+  font-family: 'B612 Mono';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/api/font/Italic') format('truetype');
+}
+@font-face {
+  font-family: 'B612 Mono';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/api/font/Bold') format('truetype');
+}
+@font-face {
+  font-family: 'B612 Mono';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/api/font/BoldItalic') format('truetype');
+}
+
+/* ---------- Tokens -------------------------------------------------------- */
+
+:root {
+  /* Surfaces */
+  --ground: #000000;
+  --card: #0A0A0A;
+  --card-elev: #111111;
+  --border: rgba(255, 255, 255, 0.12);
+  --border-sub: rgba(255, 255, 255, 0.06);
+
+  /* 3-hue discipline — sage, celeste, marigold (hex-only, no 4th hue) */
+  --sage: #708C69;       /* completed, done, positive */
+  --celeste: #BDD3CE;    /* in-progress, in-flight */
+  --marigold: #F4A258;   /* urgent, CTA, warning */
+
+  /* Neutral (not a 4th hue) */
+  --review: #A8A8A8;     /* in review, neutral / idle */
+
+  /* Text opacity ladder */
+  --t100: #FFFFFF;
+  --t72: rgba(255, 255, 255, 0.72);
+  --t56: rgba(255, 255, 255, 0.56);
+  --t44: rgba(255, 255, 255, 0.44);
+
+  /* Geometry */
+  --radius: 18px;
+  --pill: 9999px;
+  --border-width: 1px;
+
+  /* Motion — cockpit-calm, hover-only, never on load beyond the reveal */
+  --ease-interact: cubic-bezier(0.2, 0, 0, 1);
+  --ease-reveal: cubic-bezier(0, 0, 0.2, 1);
+  --dur-interact: 160ms;
+  --dur-reveal: 240ms;
+}
+
+/* ---------- Reset --------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  background: var(--ground);
+  color: var(--t100);
+  font-family: 'B612 Mono', 'SF Mono', 'Menlo', monospace;
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  /* Disable rubber-band so the page feels "fixed" — calm */
+  overscroll-behavior: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* ---------- Layout -------------------------------------------------------- */
+
+body {
+  opacity: 0;
+  animation: reveal var(--dur-reveal) var(--ease-reveal) forwards;
+}
+
+@keyframes reveal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.app {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 32px 40px 64px 40px;
+}
+
+/* ---------- Top bar ------------------------------------------------------- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 24px;
+  border-bottom: var(--border-width) solid var(--border-sub);
+  margin-bottom: 32px;
+}
+
+.topbar__brand {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  color: var(--t44);
+  text-transform: uppercase;
+}
+
+.topbar__brand strong {
+  font-weight: 700;
+  color: var(--t72);
+}
+
+.topbar__meta {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--t44);
+  text-transform: uppercase;
+}
+
+.topbar__meta .value {
+  color: var(--t72);
+  font-weight: 700;
+}
+
+/* ---------- Section titles ------------------------------------------------ */
+
+.section {
+  margin-bottom: 40px;
+}
+
+.section__title {
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  color: var(--t44);
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+
+/* ---------- Hero rings ---------------------------------------------------- */
+
+.hero {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.vital {
+  background: var(--card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-height: 132px;
+}
+
+.vital__ring {
+  width: 74px;
+  height: 74px;
+  flex-shrink: 0;
+}
+
+.vital__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.vital__label {
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  color: var(--t44);
+  text-transform: uppercase;
+}
+
+.vital__value {
+  font-size: 36px;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--t100);
+  font-variant-numeric: tabular-nums;
+}
+
+.vital__sub {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--t56);
+}
+
+/* ---------- Session grid -------------------------------------------------- */
+
+.grid {
+  display: grid;
+  /* Fixed column count per viewport breakpoint — does NOT reflow
+     on every resize (neurodivergent-friendly). */
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 1180px) {
+  .grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 780px) {
+  .grid { grid-template-columns: 1fr; }
+}
+
+.card {
+  background: var(--card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  outline: none;
+  /* Only the border color transitions — no size, no shadow, no movement */
+  transition: border-color var(--dur-interact) var(--ease-interact);
+}
+
+.card:hover,
+.card:focus-visible {
+  /* 1px border swap, not additive — avoids layout shift */
+  border-color: var(--sage);
+}
+
+.card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.card__id {
+  font-size: 11px;
+  color: var(--t56);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
+}
+
+.card__row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.card__label {
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--t44);
+}
+
+.card__value {
+  font-size: 13px;
+  color: var(--t72);
+  word-break: break-all;
+}
+
+.card__value--secondary {
+  color: var(--t56);
+}
+
+.card__value--muted {
+  color: var(--t44);
+  font-size: 11px;
+}
+
+.card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: var(--border-width) solid var(--border-sub);
+}
+
+/* ---------- Pills --------------------------------------------------------- */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 11px;
+  border-radius: var(--pill);
+  border: var(--border-width) solid var(--border);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--t72);
+  white-space: nowrap;
+}
+
+.pill--sage {
+  background: rgba(112, 140, 105, 0.12);
+  border-color: rgba(112, 140, 105, 0.48);
+  color: var(--sage);
+}
+.pill--celeste {
+  background: rgba(189, 211, 206, 0.10);
+  border-color: rgba(189, 211, 206, 0.42);
+  color: var(--celeste);
+}
+.pill--marigold {
+  background: rgba(244, 162, 88, 0.10);
+  border-color: rgba(244, 162, 88, 0.48);
+  color: var(--marigold);
+}
+.pill--review {
+  background: rgba(168, 168, 168, 0.10);
+  border-color: rgba(168, 168, 168, 0.42);
+  color: var(--review);
+}
+
+.pill--small {
+  height: 18px;
+  padding: 0 8px;
+  font-size: 9px;
+}
+
+/* ---------- Pipeline view ------------------------------------------------- */
+
+.pipeline__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.pipeline__toggle {
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--t56);
+  transition: color var(--dur-interact) var(--ease-interact);
+}
+
+.pipeline__toggle:hover,
+.pipeline__toggle:focus-visible {
+  color: var(--t100);
+}
+
+.pipeline[data-collapsed="true"] .pipeline__body {
+  display: none;
+}
+
+.pipeline__body {
+  background: var(--card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+}
+
+/* ---- Pipeline grid (quadrants with issue pills inside) ---- */
+
+.pipeline__grid {
+  display: grid;
+  /* 5 cols x 2 rows on wide; collapses below */
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 1180px) {
+  .pipeline__grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 600px) {
+  .pipeline__grid { grid-template-columns: 1fr; }
+}
+
+.quadrant {
+  background: var(--card-elev);
+  border: var(--border-width) solid var(--border-sub);
+  border-radius: 10px;
+  padding: 12px 12px 14px 12px;
+  min-height: 88px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color var(--dur-interact) var(--ease-interact);
+}
+
+/* Cockpit signature: 180deg vertical hex-opacity gradient on a thin
+   pseudo-element strip behind the head, plus a 1px bottom border glow.
+   No motion, no transitions on the gradient — calm. */
+.quadrant::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 28px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.quadrant--idle::before {
+  background: linear-gradient(180deg, #A8A8A810 0%, #A8A8A800 100%);
+}
+.quadrant--touched::before {
+  background: linear-gradient(180deg, #708C6928 0%, #708C6900 100%);
+}
+.quadrant--active::before {
+  background: linear-gradient(180deg, #BDD3CE32 0%, #BDD3CE00 100%);
+}
+
+.quadrant--idle {
+  border-bottom: 1px solid var(--border-sub);
+}
+.quadrant--touched {
+  border-bottom: 1px solid var(--sage);
+}
+.quadrant--active {
+  border-bottom: 1px solid var(--celeste);
+}
+
+.quadrant__head {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.quadrant__label {
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--t44);
+}
+
+.quadrant--touched .quadrant__label { color: var(--sage); }
+.quadrant--active .quadrant__label { color: var(--celeste); }
+
+.quadrant__count {
+  font-size: 11px;
+  color: var(--t72);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 12px;
+  text-align: right;
+}
+
+.quadrant__issues {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-content: flex-start;
+  flex: 1;
+}
+
+.quadrant__empty {
+  font-size: 11px;
+  color: var(--t44);
+  letter-spacing: 0.12em;
+}
+
+.pipeline__legend {
+  display: flex;
+  gap: 20px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: var(--border-width) solid var(--border-sub);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--t44);
+}
+
+.pipeline__legend-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.pipeline__legend-dot--idle { background: var(--review); }
+.pipeline__legend-dot--touched { background: var(--sage); }
+.pipeline__legend-dot--active { background: var(--celeste); }
+
+/* ---------- Burndown (stub) ----------------------------------------------- */
+
+.burn {
+  background: var(--card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+}
+
+.burn__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.burn__label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--t72);
+}
+
+.burn__stub-tag {
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--marigold);
+  border: var(--border-width) solid rgba(244, 162, 88, 0.48);
+  padding: 2px 8px;
+  border-radius: var(--pill);
+}
+
+.burn__value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--t100);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.burn__value .divider {
+  color: var(--t44);
+  font-weight: 400;
+}
+
+.burn__value .target {
+  color: var(--t56);
+  font-size: 18px;
+  font-weight: 400;
+}
+
+.burn__bar {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: center;
+  margin-top: 18px;
+}
+
+.burn__rail {
+  position: relative;
+  height: 28px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #A8A8A822 0%, #A8A8A844 100%);
+  border-bottom: 1px solid var(--border-sub);
+}
+
+.burn__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  /* Horizontal whisper gradient (90deg, hex opacity) — cockpit signature */
+  background: linear-gradient(90deg, #708C6918 0%, #708C6928 100%);
+  border-right: 2px solid var(--sage);
+  width: 0%;
+}
+
+.burn__source {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--t44);
+  margin-top: 12px;
+}
+
+/* ---------- Empty state --------------------------------------------------- */
+
+.empty {
+  background: var(--card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius);
+  padding: 40px;
+  text-align: center;
+}
+
+.empty__title {
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--t72);
+  margin-bottom: 8px;
+}
+
+.empty__body {
+  font-size: 12px;
+  color: var(--t56);
+  line-height: 1.6;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.empty__body code {
+  font-family: inherit;
+  color: var(--t72);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: var(--border-width) solid var(--border-sub);
+}
+
+/* ---------- Error banner (read_error from sessions.json) ------------------ */
+
+.errbar {
+  background: var(--card);
+  border: var(--border-width) solid rgba(244, 162, 88, 0.48);
+  border-radius: var(--radius);
+  padding: 14px 20px;
+  font-size: 11px;
+  color: var(--marigold);
+  letter-spacing: 0.04em;
+  margin-bottom: 24px;
+}
+
+.errbar::before {
+  content: "SESSIONS.JSON: ";
+  color: var(--t44);
+  letter-spacing: 0.22em;
+  margin-right: 8px;
+}
+
+/* ---------- Focus ring (keyboard nav) ------------------------------------- */
+
+:focus-visible {
+  outline: none;
+  /* Reuse hover behavior — the border already swaps to sage */
+}
+
+/* Copied-to-clipboard subtle hint (no popover, no motion) */
+.card[data-copied="true"] {
+  border-color: var(--celeste);
+}

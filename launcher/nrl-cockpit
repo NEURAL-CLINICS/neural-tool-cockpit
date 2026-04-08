@@ -1,0 +1,430 @@
+#!/bin/bash
+# ─────────────────────────────────────────────────────────────────────────────
+# nrl-cockpit — macOS-native NEURAL-CLINICS agent cockpit launcher
+#
+# Replaces the legacy tmux-based `nrl-agents` with a clean iTerm2 + macOS
+# Spaces layout. Each role gets its own iTerm2 window using the
+# NC-COCKPIT-CALM-001 profile (neurodivergent-friendly cockpit-calm theme).
+#
+# Usage:
+#   nrl-cockpit              Full 4-Space layout (all clusters)
+#   nrl-cockpit --minimal    Space 1 only: orchestrator + dashboard
+#   nrl-cockpit --role ROLE  Open ONE window for a specific role
+#   nrl-cockpit --status     Show registered sessions
+#   nrl-cockpit --close-all  Close all NC-profile iTerm2 windows
+#   nrl-cockpit --help       Print this usage
+#
+# Tiling strategy (auto-detected):
+#   - yabai if installed (real multi-Space control)
+#   - AppleScript window geometry + current-Space fallback otherwise
+# ─────────────────────────────────────────────────────────────────────────────
+
+set -euo pipefail
+
+# ── Constants ────────────────────────────────────────────────────────────────
+readonly NC_PROFILE_GUID="NC-COCKPIT-CALM-001"
+readonly NC_PROFILE_NAME="NEURAL • CLINICS"
+readonly NC_WORKDIR="/Users/blucid/NEURAL-CLINICS"
+readonly NC_DASHBOARD_URL="http://127.0.0.1:7734"
+readonly NC_SESSIONS_JSON="/Users/blucid/.claude/orchestrator/sessions.json"
+readonly NC_PROFILE_FILE="/Users/blucid/Library/Application Support/iTerm2/DynamicProfiles/neural-clinics.json"
+
+# Role → display title
+role_title() {
+  case "$1" in
+    orchestrator)  echo "Orchestrator" ;;
+    plan)          echo "Plan" ;;
+    impl-1)        echo "Impl-1" ;;
+    impl-2)        echo "Impl-2" ;;
+    ui-designer)   echo "UI Designer" ;;
+    ux-designer)   echo "UX Designer" ;;
+    media)         echo "Image/3D/Video" ;;
+    qgap)          echo "Quality Gap" ;;
+    sgap)          echo "Security Gap" ;;
+    comply)        echo "Compliance" ;;
+    merge)         echo "Merge" ;;
+    *)             echo "$1" ;;
+  esac
+}
+
+# ── Tiling backend detection ─────────────────────────────────────────────────
+TILING_BACKEND="applescript"
+if command -v yabai >/dev/null 2>&1; then
+  if yabai -m query --spaces >/dev/null 2>&1; then
+    TILING_BACKEND="yabai"
+  fi
+fi
+
+# ── Screen geometry (via AppleScript) ────────────────────────────────────────
+get_screen_bounds() {
+  osascript <<'APPLESCRIPT'
+tell application "Finder"
+    set b to bounds of window of desktop
+    set out to ((item 1 of b) as string) & " " & ((item 2 of b) as string) & " " & ((item 3 of b) as string) & " " & ((item 4 of b) as string)
+    return out
+end tell
+APPLESCRIPT
+}
+
+# Parse "x1 y1 x2 y2" → computes tile positions.
+# Usage: compute_tiles <layout> (returns tiles as newline-sep "x,y,w,h")
+#   layouts: half2 | split3 | grid4
+compute_tiles() {
+  local layout="$1"
+  local bounds; bounds="$(get_screen_bounds)"
+  local x1 y1 x2 y2
+  read -r x1 y1 x2 y2 <<< "$bounds"
+  local w=$((x2 - x1))
+  local h=$((y2 - y1))
+  local menubar=30  # leave room for macOS menu bar
+
+  case "$layout" in
+    half2)
+      # Left half, Right half
+      printf '%s,%s,%s,%s\n' "$x1" "$((y1 + menubar))" "$((w / 2))" "$((h - menubar))"
+      printf '%s,%s,%s,%s\n' "$((x1 + w / 2))" "$((y1 + menubar))" "$((w / 2))" "$((h - menubar))"
+      ;;
+    split3)
+      # Left half, Right-top, Right-bottom
+      printf '%s,%s,%s,%s\n' "$x1" "$((y1 + menubar))" "$((w / 2))" "$((h - menubar))"
+      printf '%s,%s,%s,%s\n' "$((x1 + w / 2))" "$((y1 + menubar))" "$((w / 2))" "$(((h - menubar) / 2))"
+      printf '%s,%s,%s,%s\n' "$((x1 + w / 2))" "$((y1 + menubar + (h - menubar) / 2))" "$((w / 2))" "$(((h - menubar) / 2))"
+      ;;
+    grid4)
+      # 2x2 grid
+      printf '%s,%s,%s,%s\n' "$x1" "$((y1 + menubar))" "$((w / 2))" "$(((h - menubar) / 2))"
+      printf '%s,%s,%s,%s\n' "$((x1 + w / 2))" "$((y1 + menubar))" "$((w / 2))" "$(((h - menubar) / 2))"
+      printf '%s,%s,%s,%s\n' "$x1" "$((y1 + menubar + (h - menubar) / 2))" "$((w / 2))" "$(((h - menubar) / 2))"
+      printf '%s,%s,%s,%s\n' "$((x1 + w / 2))" "$((y1 + menubar + (h - menubar) / 2))" "$((w / 2))" "$(((h - menubar) / 2))"
+      ;;
+  esac
+}
+
+# ── Open a single iTerm2 window for a role ───────────────────────────────────
+# Args: <role> <tile "x,y,w,h" or empty for default>
+# Sets tab title via escape sequence, launches claude via the wrapper.
+open_role_window() {
+  local role="$1"
+  local tile="${2:-}"
+  local title; title="$(role_title "$role")"
+
+  local x y w h
+  if [[ -n "$tile" ]]; then
+    IFS=',' read -r x y w h <<< "$tile"
+  fi
+
+  # Command that runs inside the new session:
+  # 1. cd into NC workdir
+  # 2. Export NRL_COCKPIT_ROLE so the wrapper registers correct role
+  # 3. Set tab title via iTerm2 escape
+  # 4. Launch claude (via the zsh wrapper function)
+  local launch_cmd="cd ${NC_WORKDIR} && export NRL_COCKPIT_ROLE=${role} && printf '\\033]1;%s\\a' '${title}' && printf '\\033]2;%s\\a' '${title}' && claude"
+
+  # Escape for AppleScript string literal (backslashes and quotes)
+  local as_cmd="${launch_cmd//\\/\\\\}"
+  as_cmd="${as_cmd//\"/\\\"}"
+
+  if [[ -n "$tile" ]]; then
+    osascript <<APPLESCRIPT
+tell application "iTerm"
+    activate
+    set newWindow to (create window with profile "${NC_PROFILE_NAME}")
+    tell current session of newWindow
+        set name to "${title}"
+        write text "${as_cmd}"
+    end tell
+    set bounds of newWindow to {${x}, ${y}, $((x + w)), $((y + h))}
+end tell
+APPLESCRIPT
+  else
+    osascript <<APPLESCRIPT
+tell application "iTerm"
+    activate
+    set newWindow to (create window with profile "${NC_PROFILE_NAME}")
+    tell current session of newWindow
+        set name to "${title}"
+        write text "${as_cmd}"
+    end tell
+end tell
+APPLESCRIPT
+  fi
+}
+
+# ── Open the dashboard (Chrome app-mode window) ──────────────────────────────
+open_dashboard() {
+  local tile="$1"
+  local x y w h
+  IFS=',' read -r x y w h <<< "$tile"
+
+  # Chrome app-mode window with geometry. --window-position expects x,y;
+  # --window-size expects w,h.
+  open -na "Google Chrome" --args \
+    --app="${NC_DASHBOARD_URL}" \
+    --window-position="${x},${y}" \
+    --window-size="${w},${h}" \
+    >/dev/null 2>&1 || true
+}
+
+# ── Move focused window to a Space (yabai only) ──────────────────────────────
+yabai_create_spaces_if_needed() {
+  local needed="$1"
+  local have
+  have="$(yabai -m query --spaces | /usr/bin/python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')"
+  while [[ "$have" -lt "$needed" ]]; do
+    yabai -m space --create >/dev/null 2>&1 || true
+    have=$((have + 1))
+  done
+}
+
+yabai_move_last_window_to_space() {
+  local space_idx="$1"
+  # Give iTerm2 a beat to register the new window
+  sleep 0.4
+  yabai -m window --space "$space_idx" >/dev/null 2>&1 || true
+}
+
+yabai_focus_space() {
+  yabai -m space --focus "$1" >/dev/null 2>&1 || true
+}
+
+# ── Cluster launchers ────────────────────────────────────────────────────────
+launch_space1_orchestrator_dashboard() {
+  echo "  Space 1: Orchestrator + Dashboard"
+  local tiles; tiles="$(compute_tiles half2)"
+  local left; left="$(sed -n '1p' <<< "$tiles")"
+  local right; right="$(sed -n '2p' <<< "$tiles")"
+
+  if [[ "$TILING_BACKEND" == "yabai" ]]; then
+    yabai_focus_space 1
+  fi
+
+  open_role_window "orchestrator" "$left"
+  [[ "$TILING_BACKEND" == "yabai" ]] && yabai_move_last_window_to_space 1
+  sleep 0.3
+  open_dashboard "$right"
+}
+
+launch_space2_plan_impl() {
+  echo "  Space 2: Plan + Impl-1 + Impl-2"
+  local tiles; tiles="$(compute_tiles split3)"
+  local t1; t1="$(sed -n '1p' <<< "$tiles")"
+  local t2; t2="$(sed -n '2p' <<< "$tiles")"
+  local t3; t3="$(sed -n '3p' <<< "$tiles")"
+
+  [[ "$TILING_BACKEND" == "yabai" ]] && yabai_focus_space 2
+
+  open_role_window "plan" "$t1"
+  [[ "$TILING_BACKEND" == "yabai" ]] && yabai_move_last_window_to_space 2
+  open_role_window "impl-1" "$t2"
+  [[ "$TILING_BACKEND" == "yabai" ]] && yabai_move_last_window_to_space 2
+  open_role_window "impl-2" "$t3"
+  [[ "$TILING_BACKEND" == "yabai" ]] && yabai_move_last_window_to_space 2
+}
+
+launch_space3_design() {
+  echo "  Space 3: UI + UX + Media"
+  local tiles; tiles="$(compute_tiles split3)"
+  local t1; t1="$(sed -n '1p' <<< "$tiles")"
+  local t2; t2="$(sed -n '2p' <<< "$tiles")"
+  local t3; t3="$(sed -n '3p' <<< "$tiles")"
+
+  [[ "$TILING_BACKEND" == "yabai" ]] && yabai_focus_space 3
+
+  open_role_window "ui-designer" "$t1"
+  [[ "$TILING_BACKEND" == "yabai" ]] && yabai_move_last_window_to_space 3
+  open_role_window "ux-designer" "$t2"
+  [[ "$TILING_BACKEND" == "yabai" ]] && yabai_move_last_window_to_space 3
+  open_role_window "media" "$t3"
+  [[ "$TILING_BACKEND" == "yabai" ]] && yabai_move_last_window_to_space 3
+}
+
+launch_space4_quality_merge() {
+  echo "  Space 4: QGap + SGap + Comply + Merge"
+  local tiles; tiles="$(compute_tiles grid4)"
+  local t1; t1="$(sed -n '1p' <<< "$tiles")"
+  local t2; t2="$(sed -n '2p' <<< "$tiles")"
+  local t3; t3="$(sed -n '3p' <<< "$tiles")"
+  local t4; t4="$(sed -n '4p' <<< "$tiles")"
+
+  [[ "$TILING_BACKEND" == "yabai" ]] && yabai_focus_space 4
+
+  open_role_window "qgap" "$t1"
+  [[ "$TILING_BACKEND" == "yabai" ]] && yabai_move_last_window_to_space 4
+  open_role_window "sgap" "$t2"
+  [[ "$TILING_BACKEND" == "yabai" ]] && yabai_move_last_window_to_space 4
+  open_role_window "comply" "$t3"
+  [[ "$TILING_BACKEND" == "yabai" ]] && yabai_move_last_window_to_space 4
+  open_role_window "merge" "$t4"
+  [[ "$TILING_BACKEND" == "yabai" ]] && yabai_move_last_window_to_space 4
+}
+
+# ── Modes ────────────────────────────────────────────────────────────────────
+mode_full() {
+  echo ""
+  echo "  NEURAL-CLINICS cockpit — full layout"
+  echo "  Tiling backend: ${TILING_BACKEND}"
+  if [[ "$TILING_BACKEND" != "yabai" ]]; then
+    cat <<'EOM'
+
+  NOTE: yabai not detected. All windows will open on the CURRENT Space.
+        To get the 4-Space layout, either:
+          1) brew install koekeishiya/formulae/yabai  (recommended)
+          2) Create 4 Spaces manually (Mission Control / trackpad swipe up)
+             and drag windows between them.
+
+EOM
+  fi
+
+  if [[ "$TILING_BACKEND" == "yabai" ]]; then
+    yabai_create_spaces_if_needed 4
+  fi
+
+  launch_space1_orchestrator_dashboard
+  sleep 0.5
+  launch_space2_plan_impl
+  sleep 0.5
+  launch_space3_design
+  sleep 0.5
+  launch_space4_quality_merge
+
+  echo ""
+  echo "  Cockpit launched. 11 claude windows + 1 dashboard window."
+  echo ""
+}
+
+mode_minimal() {
+  echo ""
+  echo "  NEURAL-CLINICS cockpit — minimal (orchestrator + dashboard)"
+  if [[ "$TILING_BACKEND" == "yabai" ]]; then
+    yabai_create_spaces_if_needed 1
+  fi
+  launch_space1_orchestrator_dashboard
+  echo ""
+}
+
+mode_role() {
+  local role="$1"
+  if [[ -z "$role" ]]; then
+    echo "Error: --role requires a role name" >&2
+    exit 1
+  fi
+  echo "  Opening window for role: $(role_title "$role")"
+  open_role_window "$role" ""
+}
+
+mode_status() {
+  if [[ ! -f "$NC_SESSIONS_JSON" ]]; then
+    echo "No sessions.json found."
+    return 0
+  fi
+  /usr/bin/python3 <<PYEOF
+import json, sys
+try:
+    with open("${NC_SESSIONS_JSON}") as f:
+        d = json.load(f)
+except Exception as e:
+    print(f"Error reading sessions.json: {e}")
+    sys.exit(0)
+
+sessions = d.get("sessions", [])
+print("")
+print(f"  NEURAL-CLINICS cockpit status")
+print(f"  Updated: {d.get('updated_at', 'never')}")
+print(f"  Active:  {len(sessions)} session(s)")
+print("")
+if not sessions:
+    print("  (no active sessions)")
+else:
+    print(f"  {'ROLE':14} {'ISSUE':10} {'CWD':32} ID")
+    print(f"  {'-'*14} {'-'*10} {'-'*32} {'-'*30}")
+    for s in sessions:
+        role = (s.get("role") or "?")[:14]
+        issue = (s.get("linear_issue") or "-")[:10]
+        cwd = (s.get("cwd") or "?").replace("/Users/blucid", "~")[:32]
+        sid = s.get("id", "?")
+        print(f"  {role:14} {issue:10} {cwd:32} {sid}")
+print("")
+PYEOF
+}
+
+mode_close_all() {
+  echo "  Closing all NC-profile iTerm2 windows..."
+  osascript <<APPLESCRIPT
+tell application "iTerm"
+    set toClose to {}
+    repeat with w in windows
+        try
+            tell current session of w
+                set p to profile name
+                if p is "${NC_PROFILE_NAME}" then
+                    copy w to end of toClose
+                end if
+            end tell
+        end try
+    end repeat
+    repeat with w in toClose
+        try
+            close w
+        end try
+    end repeat
+end tell
+APPLESCRIPT
+  echo "  Done."
+}
+
+mode_help() {
+  cat <<'EOH'
+nrl-cockpit — macOS-native NEURAL-CLINICS agent cockpit
+
+Usage:
+  nrl-cockpit              Launch full 4-Space layout (11 claude windows + dashboard)
+  nrl-cockpit --minimal    Launch Space 1 only (orchestrator + dashboard)
+  nrl-cockpit --role ROLE  Open one window for a specific role in current Space
+  nrl-cockpit --status     Show registered sessions from sessions.json
+  nrl-cockpit --close-all  Close every NC-profile iTerm2 window
+  nrl-cockpit --help       Print this help
+
+Roles:
+  orchestrator plan impl-1 impl-2 ui-designer ux-designer media
+  qgap sgap comply merge
+
+Clusters (macOS Spaces):
+  Space 1  Orchestrator + Dashboard       (2-up, left/right)
+  Space 2  Plan + Impl-1 + Impl-2         (3-up, left-half + right-split)
+  Space 3  UI + UX + Media                (3-up, left-half + right-split)
+  Space 4  QGap + SGap + Comply + Merge   (2x2 grid)
+
+Tiling:
+  yabai (if installed) → real multi-Space control + window moves
+  AppleScript fallback → all windows on current Space, tiled via bounds
+
+Profile: NC-COCKPIT-CALM-001 (neurodivergent-friendly cockpit-calm)
+Dashboard: http://127.0.0.1:7734
+EOH
+}
+
+# ── Arg parsing ──────────────────────────────────────────────────────────────
+main() {
+  if [[ $# -eq 0 ]]; then
+    mode_full
+    return
+  fi
+
+  case "$1" in
+    --help|-h)      mode_help ;;
+    --minimal)      mode_minimal ;;
+    --status)       mode_status ;;
+    --close-all)    mode_close_all ;;
+    --role)
+      shift
+      mode_role "${1:-}"
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      echo "Run 'nrl-cockpit --help' for usage." >&2
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

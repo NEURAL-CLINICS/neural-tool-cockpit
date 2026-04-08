@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>NEURAL &bull; CLINICS — Cockpit</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<main class="app" id="app">
+
+  <!-- ============================================================
+       Top bar
+       ============================================================ -->
+  <header class="topbar">
+    <div class="topbar__brand">
+      <strong>NEURAL &bull; CLINICS</strong> &nbsp; COCKPIT
+    </div>
+    <div class="topbar__meta">
+      <div>Sessions <span class="value" id="count-total">0</span></div>
+      <div>Updated <span class="value" id="updated-at">—</span></div>
+      <div>Stream <span class="value" id="stream-state">init</span></div>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       Hero rings — 3 VitalsStrips (74px diameter, 9px stroke,
+       diagonal BL->TR gradient, stopOpacity 1.0 -> 0.12)
+       ============================================================ -->
+  <section class="section">
+    <div class="section__title">Vitals</div>
+    <div class="hero">
+      <div class="vital">
+        <svg class="vital__ring" viewBox="0 0 74 74" aria-hidden="true">
+          <defs>
+            <linearGradient id="ring-sage" x1="0" y1="74" x2="74" y2="0">
+              <stop offset="0%" stop-color="#708C69" stop-opacity="1" />
+              <stop offset="100%" stop-color="#708C69" stop-opacity="0.12" />
+            </linearGradient>
+          </defs>
+          <circle cx="37" cy="37" r="32" fill="none"
+                  stroke="rgba(255,255,255,0.06)" stroke-width="9" />
+          <circle id="ring-sage-fg" cx="37" cy="37" r="32" fill="none"
+                  stroke="url(#ring-sage)" stroke-width="9"
+                  stroke-linecap="round"
+                  stroke-dasharray="201 201"
+                  stroke-dashoffset="201"
+                  transform="rotate(-90 37 37)" />
+        </svg>
+        <div class="vital__body">
+          <div class="vital__label">Active Sessions</div>
+          <div class="vital__value" id="vital-active">0</div>
+          <div class="vital__sub">Total registered</div>
+        </div>
+      </div>
+
+      <div class="vital">
+        <svg class="vital__ring" viewBox="0 0 74 74" aria-hidden="true">
+          <defs>
+            <linearGradient id="ring-celeste" x1="0" y1="74" x2="74" y2="0">
+              <stop offset="0%" stop-color="#BDD3CE" stop-opacity="1" />
+              <stop offset="100%" stop-color="#BDD3CE" stop-opacity="0.12" />
+            </linearGradient>
+          </defs>
+          <circle cx="37" cy="37" r="32" fill="none"
+                  stroke="rgba(255,255,255,0.06)" stroke-width="9" />
+          <circle id="ring-celeste-fg" cx="37" cy="37" r="32" fill="none"
+                  stroke="url(#ring-celeste)" stroke-width="9"
+                  stroke-linecap="round"
+                  stroke-dasharray="201 201"
+                  stroke-dashoffset="201"
+                  transform="rotate(-90 37 37)" />
+        </svg>
+        <div class="vital__body">
+          <div class="vital__label">In Progress</div>
+          <div class="vital__value" id="vital-progress">0</div>
+          <div class="vital__sub">Non-idle stages</div>
+        </div>
+      </div>
+
+      <div class="vital">
+        <svg class="vital__ring" viewBox="0 0 74 74" aria-hidden="true">
+          <defs>
+            <linearGradient id="ring-marigold" x1="0" y1="74" x2="74" y2="0">
+              <stop offset="0%" stop-color="#F4A258" stop-opacity="1" />
+              <stop offset="100%" stop-color="#F4A258" stop-opacity="0.12" />
+            </linearGradient>
+          </defs>
+          <circle cx="37" cy="37" r="32" fill="none"
+                  stroke="rgba(255,255,255,0.06)" stroke-width="9" />
+          <circle id="ring-marigold-fg" cx="37" cy="37" r="32" fill="none"
+                  stroke="url(#ring-marigold)" stroke-width="9"
+                  stroke-linecap="round"
+                  stroke-dasharray="201 201"
+                  stroke-dashoffset="201"
+                  transform="rotate(-90 37 37)" />
+        </svg>
+        <div class="vital__body">
+          <div class="vital__label">Waiting / Handoff</div>
+          <div class="vital__value" id="vital-waiting">0</div>
+          <div class="vital__sub">Awaiting resume</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Read error banner (hidden until an error lands)
+       ============================================================ -->
+  <div class="errbar" id="err-bar" hidden></div>
+
+  <!-- ============================================================
+       Active sessions grid
+       ============================================================ -->
+  <section class="section">
+    <div class="section__title">Active Sessions</div>
+    <div class="grid" id="session-grid"></div>
+  </section>
+
+  <!-- ============================================================
+       Pipeline view (collapsible)
+       ============================================================ -->
+  <section class="section">
+    <div class="pipeline" id="pipeline" data-collapsed="false">
+      <div class="pipeline__head">
+        <div class="section__title" style="margin-bottom:0">Pipeline</div>
+        <button class="pipeline__toggle" id="pipeline-toggle"
+                type="button" aria-expanded="true"
+                aria-controls="pipeline-body">Collapse</button>
+      </div>
+      <div class="pipeline__body" id="pipeline-body">
+        <div class="pipeline__grid" id="pipeline-grid"></div>
+        <div class="pipeline__legend">
+          <div><span class="pipeline__legend-dot pipeline__legend-dot--idle"></span>idle</div>
+          <div><span class="pipeline__legend-dot pipeline__legend-dot--touched"></span>touched</div>
+          <div><span class="pipeline__legend-dot pipeline__legend-dot--active"></span>active</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       v1 Burndown stub
+       ============================================================ -->
+  <section class="section">
+    <div class="section__title">v1 Burndown</div>
+    <div class="burn">
+      <div class="burn__head">
+        <div class="burn__label" id="burn-label">v1 Target: 100 merged PRs to main across NC org</div>
+        <div class="burn__stub-tag">Stub · Phase 2</div>
+      </div>
+      <div class="burn__value">
+        <span id="burn-current">0</span>
+        <span class="divider"> / </span>
+        <span class="target" id="burn-target">100</span>
+      </div>
+      <div class="burn__bar">
+        <div class="burn__rail">
+          <div class="burn__fill" id="burn-fill"></div>
+        </div>
+      </div>
+      <div class="burn__source" id="burn-source">source: stub</div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+// ============================================================================
+// NEURAL-CLINICS cockpit-calm dashboard — vanilla JS, no frameworks
+// ============================================================================
+
+(() => {
+  'use strict';
+
+  // -- Utils -----------------------------------------------------------------
+
+  const $ = (sel) => document.querySelector(sel);
+  const escapeHtml = (v) => {
+    if (v === null || v === undefined) return '';
+    return String(v)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  };
+
+  const abbreviateCwd = (cwd) => {
+    if (!cwd) return '—';
+    return cwd.replace(/^\/Users\/blucid/, '~');
+  };
+
+  const relativeTime = (iso) => {
+    if (!iso) return '—';
+    const then = Date.parse(iso);
+    if (Number.isNaN(then)) return iso;
+    const diff = Math.max(0, (Date.now() - then) / 1000);
+    if (diff < 10) return 'just now';
+    if (diff < 60) return `${Math.floor(diff)}s ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
+  };
+
+  const stagePillClass = (stage) => {
+    if (!stage) return 'pill--review';
+    const s = String(stage).toLowerCase();
+    if (/merge|done|complete/.test(s)) return 'pill--sage';
+    if (/handoff|waiting|resume|idle/.test(s)) return 'pill--marigold';
+    return 'pill--celeste';
+  };
+
+  // -- Hero rings ------------------------------------------------------------
+
+  // Full ring circumference for r=32: 2 * PI * 32 ≈ 201.06
+  const CIRC = 201;
+
+  // Each ring fills proportionally. Active ring fills by active count vs cap.
+  // In-progress and waiting fill relative to the same cap so they're
+  // visually comparable. Cap grows as the active count grows so we never
+  // pin at 100% prematurely.
+  const computeCap = (active) => Math.max(8, Math.ceil(active * 1.5));
+
+  const setRing = (id, value, cap) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const ratio = cap > 0 ? Math.min(1, value / cap) : 0;
+    const dash = CIRC * ratio;
+    // Dash length = filled, gap = remainder. With dashoffset 0 the circle
+    // draws from the top (because of the -90 rotation).
+    el.setAttribute('stroke-dasharray', `${dash.toFixed(2)} ${CIRC.toFixed(2)}`);
+    el.setAttribute('stroke-dashoffset', '0');
+  };
+
+  const renderVitals = (totals) => {
+    const active = totals.active || 0;
+    const progress = totals.in_progress || 0;
+    const waiting = totals.waiting || 0;
+    const cap = computeCap(active);
+
+    $('#vital-active').textContent = String(active);
+    $('#vital-progress').textContent = String(progress);
+    $('#vital-waiting').textContent = String(waiting);
+    $('#count-total').textContent = String(active);
+
+    setRing('ring-sage-fg', active, cap);
+    setRing('ring-celeste-fg', progress, cap);
+    setRing('ring-marigold-fg', waiting, cap);
+  };
+
+  // -- Session grid ----------------------------------------------------------
+
+  const renderSessions = (sessions) => {
+    const grid = $('#session-grid');
+    if (!grid) return;
+
+    if (!sessions || sessions.length === 0) {
+      grid.innerHTML = `
+        <div class="empty" style="grid-column: 1 / -1;">
+          <div class="empty__title">No active sessions</div>
+          <div class="empty__body">
+            Sessions are registered automatically by <code>nrl-claude</code>.
+            Launch one in any terminal and it will appear here.
+            The cockpit polls <code>sessions.json</code> for changes.
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // Sort by last_seen desc. Missing timestamps sink to the bottom.
+    const sorted = sessions.slice().sort((a, b) => {
+      const at = Date.parse(a.last_seen || '') || 0;
+      const bt = Date.parse(b.last_seen || '') || 0;
+      return bt - at;
+    });
+
+    grid.innerHTML = sorted.map((sess) => {
+      const role = sess.role || 'orchestrator';
+      const stage = sess.current_stage || 'idle';
+      const pillClass = stagePillClass(stage);
+      const issue = sess.linear_issue || null;
+      const handoff = sess.handoff_id || sess.last_handoff || null;
+      const id = sess.id || sess.shell_pid || 'unknown';
+      const tasks = Array.isArray(sess.tasks) ? sess.tasks : [];
+      const summary = sess.task_summary || { pending: 0, in_progress: 0, completed: 0, total: 0 };
+
+      const taskRows = tasks.length === 0
+        ? `<div class="card__tasks-empty">no active tasks</div>`
+        : tasks.map((t) => {
+            const status = (t.status || 'pending').toLowerCase();
+            // sage = completed, celeste = in_progress, t44 grey = pending
+            // Use the actively-spinning form when in_progress, else subject
+            const isInProgress = status === 'in_progress';
+            const text = isInProgress && t.activeForm ? t.activeForm : (t.subject || '');
+            const idLabel = String(t.id || '');
+            return `
+              <div class="task-row task-row--${status}" title="${escapeHtml(t.description || t.subject || '')}">
+                <span class="task-row__dot"></span>
+                <span class="task-row__id">${escapeHtml(idLabel)}</span>
+                <span class="task-row__text">${escapeHtml(text)}</span>
+              </div>
+            `;
+          }).join('');
+
+      // Compact summary line shown only when there are tasks
+      const summaryLine = summary.total > 0 ? `
+        <div class="card__tasks-summary">
+          <span class="task-stat task-stat--completed">${summary.completed}</span>
+          <span class="task-stat-divider">/</span>
+          <span class="task-stat task-stat--in_progress">${summary.in_progress}</span>
+          <span class="task-stat-divider">/</span>
+          <span class="task-stat task-stat--pending">${summary.total - summary.completed - summary.in_progress}</span>
+          <span class="task-stat-label">done · active · pending</span>
+        </div>
+      ` : '';
+
+      return `
+        <article class="card"
+                 tabindex="0"
+                 data-handoff="${escapeHtml(handoff || '')}"
+                 data-session-id="${escapeHtml(id)}">
+          <div class="card__header">
+            <span class="pill ${pillClass}">${escapeHtml(role)}</span>
+            <span class="card__id" title="${escapeHtml(id)}">${escapeHtml(id)}</span>
+          </div>
+
+          <div class="card__row">
+            <div class="card__label">CWD</div>
+            <div class="card__value">${escapeHtml(abbreviateCwd(sess.cwd))}</div>
+          </div>
+
+          ${issue ? `
+            <div class="card__row">
+              <div class="card__label">Linear</div>
+              <div>
+                <span class="pill pill--celeste pill--small">${escapeHtml(issue)}</span>
+              </div>
+            </div>
+          ` : ''}
+
+          <div class="card__row">
+            <div class="card__label">Stage</div>
+            <div class="card__value card__value--secondary">${escapeHtml(stage)}</div>
+          </div>
+
+          <div class="card__tasks">
+            <div class="card__label card__label--inline">Tasks</div>
+            ${summaryLine}
+            <div class="task-list">${taskRows}</div>
+          </div>
+
+          <div class="card__foot">
+            <span class="card__value card__value--muted">
+              last seen ${escapeHtml(relativeTime(sess.last_seen))}
+            </span>
+            ${handoff ? `
+              <span class="pill pill--sage pill--small" title="Press Enter to copy">
+                ${escapeHtml(handoff)}
+              </span>
+            ` : ''}
+          </div>
+        </article>
+      `;
+    }).join('');
+
+    // Keyboard: Enter on a focused card copies the handoff id to the
+    // clipboard. No toast, no popover — the border briefly swaps to
+    // celeste as a subtle confirmation.
+    grid.querySelectorAll('.card').forEach((card) => {
+      card.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') {
+          const handoff = card.getAttribute('data-handoff');
+          if (!handoff) return;
+          ev.preventDefault();
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(handoff).then(() => {
+              card.setAttribute('data-copied', 'true');
+              setTimeout(() => card.removeAttribute('data-copied'), 800);
+            }).catch(() => { /* silent — no toasts per spec */ });
+          }
+        }
+      });
+    });
+  };
+
+  // -- Pipeline --------------------------------------------------------------
+
+  const STAGE_LABELS = {
+    'plan':   'plan',
+    'impl':   'impl',
+    'qgap-m': 'qgap·m',
+    'qgap-c': 'qgap·c',
+    'sgap-m': 'sgap·m',
+    'sgap-c': 'sgap·c',
+    'comply': 'comply',
+    'docs':   'docs',
+    'regress':'regress',
+    'merge':  'merge',
+  };
+
+  // Stage color hint per state — drives the quadrant accent edge
+  const stateAccent = (state) => {
+    if (state === 'active') return 'celeste';
+    if (state === 'touched') return 'sage';
+    return 'review';
+  };
+
+  // Render the pipeline as a grid of 10 stage quadrants. Each quadrant
+  // shows the stage label, the state-derived accent edge, and the list
+  // of Linear issue pills currently parked in that stage. When a session's
+  // current_stage changes, its issue pill auto-moves to the new quadrant
+  // on the next SSE tick.
+  const renderPipeline = (pipelineState) => {
+    const grid = $('#pipeline-grid');
+    if (!grid || !Array.isArray(pipelineState)) return;
+
+    grid.innerHTML = pipelineState.map((s) => {
+      const label = STAGE_LABELS[s.stage] || s.stage;
+      const accent = stateAccent(s.state);
+      const issues = Array.isArray(s.issues) ? s.issues : [];
+      const count = s.issue_count || issues.length || 0;
+
+      const issuePills = issues.length === 0
+        ? `<div class="quadrant__empty">—</div>`
+        : issues.map((iss) => {
+            const synthetic = iss.is_synthetic === true;
+            const cls = synthetic ? 'pill pill--review pill--small' : 'pill pill--celeste pill--small';
+            const role = iss.role ? `${iss.role} · ` : '';
+            const title = `${role}${iss.session_id || ''}`;
+            return `<span class="${cls}" title="${escapeHtml(title)}">${escapeHtml(iss.key)}</span>`;
+          }).join('');
+
+      return `
+        <div class="quadrant quadrant--${s.state} quadrant--accent-${accent}"
+             data-stage="${escapeHtml(s.stage)}">
+          <div class="quadrant__head">
+            <div class="quadrant__label">${escapeHtml(label)}</div>
+            <div class="quadrant__count">${count > 0 ? count : ''}</div>
+          </div>
+          <div class="quadrant__issues">${issuePills}</div>
+        </div>
+      `;
+    }).join('');
+  };
+
+  const wirePipelineToggle = () => {
+    const root = $('#pipeline');
+    const btn = $('#pipeline-toggle');
+    if (!root || !btn) return;
+    btn.addEventListener('click', () => {
+      const collapsed = root.getAttribute('data-collapsed') === 'true';
+      root.setAttribute('data-collapsed', collapsed ? 'false' : 'true');
+      btn.textContent = collapsed ? 'Collapse' : 'Expand';
+      btn.setAttribute('aria-expanded', collapsed ? 'true' : 'false');
+    });
+  };
+
+  // -- Burndown (stub) -------------------------------------------------------
+
+  const renderBurndown = (burn) => {
+    if (!burn) return;
+    $('#burn-label').textContent = burn.label || 'v1 Target: 100 merged PRs';
+    $('#burn-current').textContent = String(burn.current || 0);
+    $('#burn-target').textContent = String(burn.target || 100);
+    $('#burn-source').textContent = `source: ${burn.source || 'stub'}`;
+    const ratio = burn.target > 0 ? Math.min(1, (burn.current || 0) / burn.target) : 0;
+    $('#burn-fill').style.width = `${(ratio * 100).toFixed(1)}%`;
+  };
+
+  // -- Error banner ----------------------------------------------------------
+
+  const renderError = (msg) => {
+    const el = $('#err-bar');
+    if (!el) return;
+    if (msg) {
+      el.textContent = msg;
+      el.hidden = false;
+    } else {
+      el.hidden = true;
+    }
+  };
+
+  // -- State application -----------------------------------------------------
+
+  const applyState = (state) => {
+    if (!state || typeof state !== 'object') return;
+
+    renderError(state.read_error);
+    renderVitals(state.totals || {});
+    renderSessions(state.sessions || []);
+    renderPipeline(state.pipeline_state || []);
+    renderBurndown(state.burndown_stub || {});
+
+    const updated = state.updated_at ? new Date(state.updated_at) : null;
+    $('#updated-at').textContent = updated
+      ? updated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      : '—';
+  };
+
+  // -- SSE connection --------------------------------------------------------
+
+  let evtSource = null;
+
+  const setStreamState = (label) => {
+    const el = $('#stream-state');
+    if (el) el.textContent = label;
+  };
+
+  const connect = () => {
+    if (evtSource) evtSource.close();
+    setStreamState('connect');
+    try {
+      evtSource = new EventSource('/events');
+    } catch (e) {
+      setStreamState('error');
+      fetchOnce();
+      return;
+    }
+
+    evtSource.addEventListener('open', () => setStreamState('live'));
+    evtSource.addEventListener('state', (ev) => {
+      try {
+        applyState(JSON.parse(ev.data));
+        setStreamState('live');
+      } catch (e) {
+        setStreamState('parse err');
+      }
+    });
+    evtSource.addEventListener('error', () => {
+      setStreamState('retry');
+      // EventSource auto-reconnects; no manual loop needed.
+    });
+  };
+
+  // Fallback one-shot fetch (used if EventSource construction throws)
+  const fetchOnce = async () => {
+    try {
+      const res = await fetch('/api/state');
+      if (res.ok) applyState(await res.json());
+    } catch (e) {
+      setStreamState('offline');
+    }
+  };
+
+  // -- Boot ------------------------------------------------------------------
+
+  document.addEventListener('DOMContentLoaded', () => {
+    wirePipelineToggle();
+    connect();
+    // Also run a single fetch so the UI has data even if SSE is slow
+    // to send its initial event.
+    fetchOnce();
+  });
+})();
+</script>
+</body>
+</html>
