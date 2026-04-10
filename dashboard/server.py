@@ -27,7 +27,7 @@ import os
 import shutil
 import subprocess
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -44,13 +44,17 @@ from fastapi.staticfiles import StaticFiles
 # ---------------------------------------------------------------------------
 # Absolute paths (per CLAUDE.md: never use ~/)
 # ---------------------------------------------------------------------------
+# Support environment variable overrides for portability (CI, non-Mac systems)
 
-DASHBOARD_DIR = Path("/Users/blucid/.claude/orchestrator/dashboard")
+_HOME = os.environ.get("HOME", "/Users/blucid")
+_NRL_ORCH_DIR = os.environ.get("NRL_ORCH_DIR", f"{_HOME}/.claude/orchestrator")
+
+DASHBOARD_DIR = Path(os.environ.get("NRL_DASHBOARD_DIR", f"{_NRL_ORCH_DIR}/dashboard"))
 STATIC_DIR = DASHBOARD_DIR / "static"
-SESSIONS_JSON = Path("/Users/blucid/.claude/orchestrator/sessions.json")
-FONT_DIR = Path("/Users/blucid/Library/Fonts")
-CLAUDE_TASKS_DIR = Path("/Users/blucid/.claude/tasks")
-CLAUDE_PROJECTS_DIR = Path("/Users/blucid/.claude/projects/-Users-blucid")
+SESSIONS_JSON = Path(os.environ.get("NRL_ORCH_SESSIONS", f"{_NRL_ORCH_DIR}/sessions.json"))
+FONT_DIR = Path(os.environ.get("NRL_FONT_DIR", f"{_HOME}/Library/Fonts"))
+CLAUDE_TASKS_DIR = Path(os.environ.get("NRL_TASKS_DIR", f"{_HOME}/.claude/tasks"))
+CLAUDE_PROJECTS_DIR = Path(os.environ.get("NRL_PROJECTS_DIR", f"{_HOME}/.claude/projects/-Users-blucid"))
 
 # Whitelisted B612 Mono filenames (prevents path traversal via /api/font/<n>)
 ALLOWED_FONT_FACES = {
@@ -324,6 +328,7 @@ def compute_burndown_stub() -> dict[str, Any]:
         # Search for PRs merged in the last 7 days across the whole org.
         # We use `gh search prs` because it works across repos in one call,
         # whereas `gh pr list --repo` requires a repo argument each time.
+        seven_days_ago = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")
         result = subprocess.run(
             [
                 gh_path,
@@ -334,7 +339,7 @@ def compute_burndown_stub() -> dict[str, Any]:
                 "--state",
                 "closed",
                 "--merged-at",
-                ">2026-03-24",  # approx 7 days ago from today (2026-03-31)
+                f">{seven_days_ago}",
                 "--limit",
                 "200",
                 "--json",
