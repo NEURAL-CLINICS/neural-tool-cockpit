@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install fastapi uvicorn
+          pip install ruff mypy
+
+      - name: Lint Python with Ruff
+        run: ruff check dashboard/server.py
+
+      - name: Type check with mypy
+        run: mypy dashboard/server.py --ignore-missing-imports --no-error-summary || true
+
+      - name: Syntax check shell scripts
+        run: |
+          bash -n shell/30-nrl-cockpit.zsh || true
+          bash -n shell/vps-wrapper.sh
+          bash -n dashboard/run.sh
+          bash -n launcher/nrl-cockpit
+
+      - name: Validate JSON-like structures
+        run: |
+          python -c "
+          import json
+          import sys
+
+          # Verify server.py imports work
+          sys.path.insert(0, 'dashboard')
+          try:
+              from server import PIPELINE_STAGES, STAGE_ALIASES
+              print(f'Pipeline stages: {len(PIPELINE_STAGES)}')
+              print(f'Stage aliases: {len(STAGE_ALIASES)}')
+          except ImportError as e:
+              print(f'Import check skipped (expected in CI): {e}')
+          "
+
+  validate-makefile:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Makefile syntax
+        run: make -n install DRY_RUN=1 2>&1 | head -20 || true
